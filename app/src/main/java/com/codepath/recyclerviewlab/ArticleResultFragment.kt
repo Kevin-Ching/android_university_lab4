@@ -23,10 +23,12 @@ class ArticleResultFragment: Fragment() {
     private val client = NYTimesApiClient()
     private var recyclerView: RecyclerView? = null
     private var progressSpinner: ContentLoadingProgressBar? = null
+    private var currentQuery: String? = null
     override fun onPrepareOptionsMenu(menu: Menu) {
         val item = menu.findItem(R.id.action_search).actionView as SearchView
         item.setOnQueryTextListener(object : OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
+                currentQuery = query
                 loadNewArticlesByQuery(query)
                 return false
             }
@@ -52,6 +54,14 @@ class ArticleResultFragment: Fragment() {
         val linearLayoutManager = LinearLayoutManager(requireContext())
         recyclerView?.layoutManager = linearLayoutManager
         recyclerView?.adapter = ArticleResultsRecyclerViewAdapter()
+
+        recyclerView?.addOnScrollListener(object : EndlessRecyclerViewScrollListener(linearLayoutManager) {
+            override fun onLoadMore(page: Int, totalItemsCount: Int, view: RecyclerView?) {
+                loadArticlesByPage(page)
+            }
+
+        })
+
         return view
     }
 
@@ -84,5 +94,22 @@ class ArticleResultFragment: Fragment() {
 
     private fun loadArticlesByPage(page: Int) {
         // TODO(Checkpoint 4): Implement this method to do infinite scroll
+        val response = object : CallbackResponse<List<Article>> {
+            override fun onSuccess(model: List<Article>) {
+                Log.d(ArticleResultFragment::class.java.simpleName, "Success: page $page for $currentQuery")
+                val adapter = recyclerView?.adapter as ArticleResultsRecyclerViewAdapter?
+                adapter?.addArticles(model)
+                adapter?.notifyDataSetChanged()
+                progressSpinner?.hide()
+            }
+
+            override fun onFailure(error: Throwable?) {
+                Toast.makeText(context, error?.message, Toast.LENGTH_SHORT).show()
+                Log.d(ArticleResultFragment::class.java.simpleName, "failure for page $page")
+            }
+
+        }
+
+        client.getArticlesByQuery(response, currentQuery, page)
     }
 }
